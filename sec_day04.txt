@@ -1,0 +1,266 @@
+安全与监控 6天
+1-4 安全
+5-6 监控 Zabbix
++++++++++++++++++++++++++
+day01
+ 
+如何保护1台服务的安全：
+技术手段：系统安全  服务安全  数据安全   网络安全 
+非技术手段：管理制度实现  社会工程学
+  
+
+与系统相关的配置和命令
+/etc/passwd
+/etc/shadow
+/etc/group
+/etc/gshadow
+ls -a  /etc/skel/
+/etc/login.defs
+
+useradd   
+userdel -r  
+usermod  -G  -g   -u  -g 
+passwd
+chage
+
+二、
+用户切换 
+su
+
+用户提权
+
+
+三、ssh服务
+
+
+四、selinux 的使用
+开启 50 主机上的selinux  、运行网站服务 
+在网页目录下编写网页文件test.html 
+打开主机的浏览器访问 50主机的网页文件test.html
+
+
+9：05 正式讲课
+
+++++++++++++++++++++++++++++++++
+day02学习任务
+++++++1 gpg数据加密与解密
+1.1 对称加密与解密
+
+发送方加密文件  -c
+                a.txt.gpg
+
+接收放解密文件  -d
+
+
+1.2非对称加密与解密(密钥对)
+                   公钥  私钥
+                   加密  解密
+userb[接收方]
+1 创建密钥对
+2 导出公钥
+3 把公钥文件传给用户usera
+
+usera[发送方]
+1 导入公钥
+2 加密明文文件
+3 把加密后的文件传给用户userb
+4 用户userb解密文件
+
+
+1.3数字签名
+发送方使用私钥签名  userb
+接收方使用公钥验证签名 usera
+
+++++++2 aide入侵检测系统
+主机50
+]# yum  -y  install aide
+]# vim /etc/aide.conf
+98 /testdir  FIPSR
+:99,312s/^/#/
+:wq
+]# mkdir  /testdir
+]# echo  abced  > /testdir/a.txt
+]# vim /testdir/b.txt
+dfafafa
+:wq
+]# aide --help
+]# aide  -i 
+]# cd /var/lib/aide
+]# ls
+]# cp aide.db.new.gz  /root/
+]# mv aide.db.new.gz  aide.db.gz
+]# vim /testdir/a.txt
+fdfafaffff
+:wq
+]# rm -rf  /testdir/b.txt
+]# touch  /testdir/c.txt
+]# aide  -C
+
+++++++3 抓包与扫描  协议分析软件 wireshark 50
+
+]#tcpdump -i eth0 -A -c 1 tcp port 80 
+and host 192.168.4.52
+
+应用层
+表示层
+会话成
+传输层
+网络层  
+数据链路层
+物理层
+       firewalld 防火墙服务 rhel7
+day04  iptables  防火墙服务 rhel6
+ ]# systemctl  stop firewalld
+ ]# systemctl  disable firewalld
+ 1005  yum -y install iptables-services
+ 1006  rpm  -qa  | grep  -i  iptables
+ 1007  service iptables status
+ 1008  service iptables start
+ 1010  chkconfig iptables on
+
+4张表 （功能项）
+raw  (OUTPUT PREROUTIN )
+mangle (INPUT  OUTPUT  FORWARD PREROUTIN POSTROUTING)
+nat    (INPUT  OUTPUT PREROUTIN POSTROUTING)
+filter 默认表 (INPUT  OUTPUT  FORWARD)
+
+5种链(ip包传输的方向)
+INPUT  进入防火墙本机ip包
+OUTPUT 从防火墙本机出去的ip包
+FOWARD 经过防火墙主机的ip包
+POSTROUTING 路由后
+PREROUTIN   路由前
+
+规则(匹配到达防火墙主机的ip包 存放在链里)
+
+
+处理动作（ip 到达到防火墙服务后，与规则匹配的处理方式）
+放行  ACCEPT
+丢弃  DROP
+拒绝  REJECT
+记录日志  LOG
+
+
+iptables 命令 语法格式
+]# iptables  -t 表名  管理选项  链名  规则 -j 动作
+
+管理选项  -L  -n  -F  --line-numbers
+
+  690  iptables -t filter -L
+  691  iptables  -L
+  692  iptables  -nL
+  693  iptables  -nL --line-numbers
+  694  iptables  -F
+  695  iptables  -nL --line-numbers
+  696  service  iptables save
+
+iptables -L INPUT --line-numbers
+
+iptables -t nat -L --line-numbers
+
+iptables -t nat -L POSTROUTING --line-numbers 
+
+iptables -t nat -F
+
+]# iptables -t mangle -F
+
+]# iptables -t raw -F
+
+]# service  iptables save
+
+
+规则的写法
+-P  -s  --dport   -p
+
+]# iptables -t filter -A INPUT -p tcp -s 192.168.4.254 
+--dport 22 -j ACCEPT
+
+]# iptables -t filter -P INPUT DROP
+
+]# service  iptables save
+
+
+]# iptables -t filter -A INPUT -p tcp --dport 80 -j ACCEPT
+
+]# service  iptables save
+
+]# iptables -t filter -A INPUT -p icmp -j ACCEPT
+
+]# service  iptables save
+
+]# iptables -t filter -A INPUT -p icmp -s  192.168.4.52 
+-j REJECT
+
+]# iptables -t filter -nL INPUT --line-numbers
+
+]# iptables -t filter -D INPUT 4
+
+]# iptables -t filter -I INPUT 3 -p icmp -s 192.168.4.52 
+-j REJECT
+
+]# iptables -t filter -I INPUT 4 -p icmp -s 192.168.4.51 
+-j DROP
+
+]# service  iptables save
+
+]# iptables -t filter -D INPUT 5
+]# iptables -t filter -D INPUT 4
+]# iptables -t filter -D INPUT 3
+]# iptables -t filter -nL --line-numbers
+
+]# iptables -t filter -A INPUT 
+-p icmp --icmp-type echo-reply -j ACCEPT
+]# service  iptables save
+
+echo-request(ping) 
+echo-reply (pong)
+
+
+]# iptables -t filter  -P INPUT  ACCEPT
+]# iptables -t filter -F
+]# service  iptables save
+
+]# arp  -n 
+
+]# iptables -t filter -A  INPUT -p icmp 
+-m mac --mac-source 74:52:09:07:53:01 -j DROP
+
+]# service  iptables save
+
+]# iptables -t filter -A INPUT 
+-p tcp  -m multiport --dports 80,6350  -j DROP
+
+]# service  iptables save
+
+]# redis-cli  -h 192.168.4.50 -p 6350
+]# curl http://192.168.4.50/b.html
+
+]# iptables -t filter -A INPUT -p icmp
+-m  iprange  --src-range 192.168.4.51-192.168.4.55 -j DROP
+
+]# service  iptables save
++++++++++++++++++++++++++++++++++++++++++++
+网络防火墙 主机52的准备
+  203  systemctl  stop firewalld
+  204  systemctl  disable firewalld
+  205  yum -y install iptables-services
+  206  service  start iptables
+  207  chkconfig  iptables on
+  208  iptables -t filter -F
+  209  iptables -t nat -F
+  210  iptables -t raw -F
+  211  iptables -t mangle -F
+  213  service  iptables  save
+  214  service  iptables  restart
+
+]#iptables -t filter -P FORWARD DROP
+
+]#iptables -t filter -A FORWARD  
+-p tcp --dport 80 -j ACCEPT
+
+]# iptables -t filter -nL
+
+]#iptables -t filter -A FORWARD  
+-p tcp --sport 80 -j ACCEPT
+
+]#iptables -t filter -nL --line-numbers

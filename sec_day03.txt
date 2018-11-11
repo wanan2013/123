@@ -1,0 +1,207 @@
++++++++++++++++++++++++++++++++++++++++++++
+网络防火墙 主机52的准备
+  203  systemctl  stop firewalld
+  204  systemctl  disable firewalld
+  205  yum -y install iptables-services
+  206  service   iptables  start
+  207  chkconfig  iptables on
+  208  iptables -t filter -F
+  209  iptables -t nat -F
+  210  iptables -t raw -F
+  211  iptables -t mangle -F
+  213  service  iptables  save
+  214  service  iptables  restart
+
+]#iptables -t filter -P FORWARD DROP
+
+[root@mongodb52 ~]# iptables -t filter -nL FORWARD
+Chain FORWARD (policy DROP)
+target     prot opt source               destination         
+[root@mongodb52 ~]# 
+[root@mongodb52 ~]# iptables -t filter -A FORWARD \
+> -p tcp  --dport 80  -j  ACCEPT
+[root@mongodb52 ~]# 
+[root@mongodb52 ~]# iptables -t filter -A FORWARD \
+> -p tcp --sport 80 -j ACCEPT 
+[root@mongodb52 ~]# 
+
+
+[root@mongodb52 ~]# iptables -t filter -A FORWARD 
+-p icmp  -j ACCEPT
+
+[root@mongodb52 ~]# iptables -t filter -A FORWARD \
+> -p tcp --dport 3306 -j ACCEPT
+
+[root@mongodb52 ~]# iptables -t filter -A FORWARD \
+> -p tcp --sport 3306 -j ACCEPT
+
+
+[root@mongodb52 ~]# service  iptables  save
+
+[root@mongodb52 ~]# iptables -t filter -nL FORWARD 
+--line-numbers
+
+Chain FORWARD (policy DROP)
+num  target     prot opt source               destination         
+1    ACCEPT     tcp  --  0.0.0.0/0            0.0.0.0/0            tcp dpt:80
+2    ACCEPT     tcp  --  0.0.0.0/0            0.0.0.0/0            tcp spt:80
+3    ACCEPT     icmp --  0.0.0.0/0            0.0.0.0/0           
+4    ACCEPT     tcp  --  0.0.0.0/0            0.0.0.0/0            tcp dpt:3306
+5    ACCEPT     tcp  --  0.0.0.0/0            0.0.0.0/0            tcp spt:3306
+[root@mongodb52 ~]#          tcp spt:80
+
+++++++++++++++++++++++++++++++++++++++++++++++++
+让局域网的所有主机共享1个公网ip地址上网
+
+主机51 做公网网站服务器
+[root@mongodb51 ~]# route del default gw  192.168.2.52
+[root@mongodb51 ~]# route -n
+[root@mongodb51 ~]# ifdown eth0
+[root@mongodb51 ~]# ifconfig  eth1
+
+[root@mongodb51 ~]# rpm -q httpd
+httpd-2.4.6-67.el7.x86_64
+[root@mongodb51 ~]# systemctl  restart httpd 
+[root@mongodb51 ~]# echo  web51  > /var/www/html/test.html
+
+防火墙主机52
+[root@mongodb52 ~]# iptables -t filter -F
+[root@mongodb52 ~]# iptables -t filter -P FORWARD ACCEPT
+[root@mongodb52 ~]# service  iptables save
+[root@mongodb52 ~]# sysctl  -p
+net.ipv4.ip_forward = 1
+[root@mongodb52 ~]# ifconfig  eth0 ;  ifconfig  eth1
+
+
+
+[root@redis53 ~]# ifconfig  eth0 | head -2
+eth0: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 1500
+        inet 192.168.4.53  netmask 255.255.255.0  broadcast 192.168.4.255
+[root@redis53 ~]# 
+[root@redis53 ~]# route -n
+Kernel IP routing table
+Destination     Gateway         Genmask         Flags Metric Ref    Use Iface
+0.0.0.0         192.168.4.52    0.0.0.0         UG    0      0        0 eth0
+
+在52主机编写防火墙规则
+[root@mongodb52 ~]# iptables -t nat -A POSTROUTING \
+> -s 192.168.4.0/24 -p tcp --dport 80 \
+> -j SNAT --to-source 192.168.2.52
+
+[root@mongodb52 ~]# iptables -t nat -nL POSTROUTING
+
+[root@mongodb52 ~]# service iptables save
+
+[root@mongodb51 ~]# tail -f /etc/httpd/logs/access_log
+
+[root@redis53 ~]# curl  http://192.168.2.51/test.html
+web51
+[root@redis53 ~]#     
+
+++++++++++++++++++++++++++++++++++++++++
+day03  
+一、审计系统 audit
+二、服务安全 nginx  mysql  tomcat
+三、打补丁
+++++++++++++++++++++++++++++++++++++++
+在50主机上安装nginx软件并运行服务
+]#service  iptables stop
+]#systemctl stop  firewalld
+
+ 1006  rpm -q gcc 
+ 1007  rpm -q zlib-devel pcre-devel
+ 1008  yum  -y  install  zlib-devel pcre-devel
+ 1009  tar -zxvf nginx-1.12.2.tar.gz 
+ 1010  cd nginx-1.12.2/
+ 1011  ./configure --help 
+ 1012  ./configure --prefix=/usr/local/nginx
+ 1013  make
+ 1014  make install
+ 1015  /usr/local/nginx/sbin/nginx 
+ 1016  netstat -utnlp  | grep  :80
+
+
+]#vim /usr/local/nginx/conf/nginx.conf
+server {
+  autoindex on;
+
+:wq
+
+]#/usr/local/nginx/sbin/nginx  -t
+]# /usr/local/nginx/sbin/nginx
+]# mkdir /usr/local/nginx/html/test
+]#touch /usr/local/nginx/html/test/{a,b,c}.txt
+]# ls /usr/local/nginx/html/test/
+
+firewall  http://192.168.4.50/test
+
+
+[root@client50 nginx-1.12.2]# vim /usr/local/nginx/
+conf/nginx.conf
+
+http {
+
+   server_tokens off; 隐藏软件版本
+
+:wq
+]#/usr/local/nginx/sbin/nginx  -s stop
+
+]#/usr/local/nginx/sbin/nginx  -t
+
+]# /usr/local/nginx/sbin/nginx
+
+]# curl  -I http://192.168.4.50
+
+
+隐藏软件名
+]# cd nginx-1.12.2
+]# vim +48 src/http/ngx_http_header_filter_module.c
+static u_char ngx_http_server_string[] = "Server: IIS" CRLF;
+static u_char ngx_http_server_full_string[] = "Server: IIS" CRLF;
+static u_char ngx_http_server_build_string[] = "Server: IIS" CRLF;
+:wq
+
+ 1049  ./configure --prefix=/usr/local/nginx
+ 1050  make
+ 1051  make install
+
+[root@client50 nginx-1.12.2]# killall -9 nginx
+[root@client50 nginx-1.12.2]# 
+[root@client50 nginx-1.12.2]# /usr/local/nginx/sbin/nginx 
+
+[root@room9pc17 soft]# curl  -I http://192.168.4.50
+HTTP/1.1 200 OK
+Server: IIS
+
+
+
+屏蔽非法访问
+server {
+
+ if ($request_method  !~  ^(GET|POST)$  ) {
+                     return 500;
+               }
+
+}
+
+】# curl  -i  -X  GET  http://192.168.4.50    
+
+】# curl  -i  -X  HEAD  http://192.168.4.50 
+
+
+并发量处理限制
+
+http{
+    limit_req_zone $binary_remote_addr zone=one:10m rate=1r/s; 
+
+   server {
+      limit_req zone=one burst=5;
+
+   }
+}
+
+]# ab  -c  10  -n  10  http://192.168.4.50/
+
+有4个请求 不处理
+
+

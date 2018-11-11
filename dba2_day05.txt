@@ -1,0 +1,118 @@
+在主机192.168.4.57 上配置mycat服务 步骤：
+1 装包
+]# rpm  -qa  | grep  -i  jdk
+]# java -version
+
+]# tar -zxvf 
+Mycat-server-1.4-beta-20150604171601-linux.tar.gz
+
+[root@mycat57 ~]# mv mycat /usr/local/
+
+[root@mycat57 ~]# ls /usr/local/mycat/
+bin  catlet  conf  lib  logs  version.txt
+
+2 修改配置文件
+2.1 定义客户连接mycat时使用的用户名及密码和访问权限、逻辑库的名称
+]# vim /usr/local/mycat/conf/server.xml
+ 34         <user name="admin">
+ 35                 <property name="password">123456</property>
+ 36                 <property name="schemas">TESTDB</property>
+ 37         </user>
+ 38 
+ 39         <user name="user">
+ 40                 <property name="password">user</property>
+ 41                 <property name="schemas">TESTDB</property>
+ 42                 <property name="readOnly">true</property>
+ 43         </user>
+:wq
+
+2.2 定义数据分片
+]# cp /usr/local/mycat/conf/schema.xml /root/
+
+]# vim  /usr/local/mycat/conf/schema.xml
+配置见PPT
+
+3 根据配置文件的设置在数据库服务器上做对应的配置
+mysql54]# 
+vim /etc/my.cnf
+[mysqld]
+lower_case_table_names = 1
+:wq
+]# systemctl   restart mysqld
+
+mysql> create  database db1;
+mysql> grant  all  on  *.*  to root@"%" identified by "123qqq...A";
+mysql55]# 
+vim /etc/my.cnf
+[mysqld]
+lower_case_table_names = 1
+:wq
+]# systemctl   restart mysqld
+
+mysql> create  database db2;
+mysql> grant  all  on  *.*  to root@"%" identified by "123qqq...A";
+
+4 启动服务
+]#vim /usr/local/mycat/logs/wrapper.log 
+
+]#/usr/local/mycat/bin/mycat start
+
+]#/usr/local/mycat/bin/mycat stop
+
+5 查服务信息
+]#netstat -utnlp  | grep  :8066
+
+6 客户端测试配置
+client50]# ]# mysql -h192.168.4.56 -P8066 -uadmin -padmin
+mysql> show  databases;
+mysql> use TESTDB;
+mysql> show tables;
+mysql> 
+create table  employee (
+id int(2) primary key  auto_increment,  
+name char(10),
+age tinyint(2) default 18,
+sex enum("boy","girl") default "boy",
+sharding_id  int(2)
+);
+mysql> desc  employee;
+mysql> insert into employee(name,sharding_id)
+values("bob",10000),("tom",10010);
+
+mysql> insert into employee(name,sharding_id) 
+values("jerry",10010);
+
+select  *  from employee;
+报错
+mysql> insert into employee(name,sharding_id) 
+values("jerry",10020);
++++++++++++++++++++++++++++++++++
+dba2_day02 下午 MySQL性能优化
+
+搭建监控服务器：监控服务的硬件使用率
+CPU  内存  存储  网络流量
+ 
+数据库服务运行参数：
+mysql> set global  选项=值;
+
+vim /etc/my.cnf
+[mysqld]
+选项=值
+:wq
+
+
+mysql> set global  max_connections = 300;
+
+mysql> show variables like "max_connections";
+其他操作命令见PPT
+
+
+
+
+
+
+
+
+
+
+

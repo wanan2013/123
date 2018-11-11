@@ -1,0 +1,255 @@
+DBA1_DAY05 数据备份/数据恢复
+
+物理备份 50
+mkdir  /datadir
+cp  -r  /var/lib/mysql  /datadir/mysql.bak  
+scp  -r  /datadir/mysql.bak  192.168.4.51:/root/
+
+物理恢复 51
+rm -rf  /var/lib/mysql
+systemctl  stop  mysqld
+cp  -r  /root/mysql.bak  /var/lib/mysql
+chown  -R  mysql:mysql  /var/lib/mysql
+systemctl  start mysqld
+mysql  -uroot  -p密码
+
+
+完全备份数据 mysqldump命令
+
+]# mysqldump -uroot -p123456  -A > /datadir/allbak.sql  
+]# mysqldump -uroot -p123456  db5 > /datadir/db5.sql
+]# mysqldump -uroot -p123456 db5 t1 > /datadir/db5_t1.sql
+]# mysqldump -uroot -p123456 -B db5 db55 > /datadir/twodb.sql
+
+]# ls  /datadir/*.sql
+]# cat /datadir/db5_t1.sql
+
+把备份文件拷贝给主机52
+scp  /datadir/db5.sql  192.168.4.52:/root/
+scp  /datadir/twodb.sql  192.168.4.52:/root/
+
+完全恢复数据 mysql命令 格式
+]#mysql  -uroot  -p密码  [数据库名] <  目录名/xxx.sql
+
+或
+
+mysql> source  目录名/xxxx.sql
+
+
+在52主机上练习数据恢复
+]#ls /root/*.sql
+]#mysql  -uroot  -p123qqq...A  <  /root/twodb.sql
+mysql> show databases;
+db5
+db55
+drop database db5;
+create database db5; 新建空库
+quit;
+]#mysql  -uroot  -p123qqq...A db5 <  /root/db5.sql
+mysql> show databases;
+db5
+
+
+
+每周一的半夜23：30  备份数据库服务器上的
+所有的数据到系统的/datadir目录下使用系统日期做备份文件名称。
+
+]#vim /root/allbak.sh
+#!/bin/bash
+....
+....
+:wq
+
+]# chmod  +x  /root/allbak.sh 
+]# crontable  -e
+30  23  * * 1  /root/allbak.sh
+
+增量备份数据/增量恢复数据
+方法1 使用binlog日志文件实现数据的增量备份和恢复
+
+binlog日志使用：
+binlog日志介绍？记录在服务器上执行的出查询之外的sql命令
+
+启用binlog日志
+]#vim /etc/my.cnf
+[mysqld]
+server_id=50
+log_bin
+binlog_format="mixed"
+:wq
+]# systemctl  restart  mysqld
+
+]#ls  /var/lib/mysql/*-bin.*
+
+查看日志文件内容
+]#mysqlbinlog  /var/lib/mysql/binlog日志文件命令
+]#mysqlbinlog /var/lib/mysql/client50-bin.000001
+
+
+启用binlog日志文件时，指定存储位置和日志名
+]#vim /etc/my.cnf
+[mysqld]
+server_id=50
+#log_bin
+log_bin=/logdir/plj  指定日志目录和名称
+binlog_format="mixed"
+:wq
+
+[root@client50 ~]# mkdir /logdir 创建日志目录
+[root@client50 ~]# chown mysql /logdir/ 修改所有者为mysql
+[root@client50 ~]# ls -ld /logdir/
+drwxr-xr-x. 2 mysql root 6 10 20 11:47 /logdir/
+
+]# systemctl  restart  mysqld
+[root@client50 ~]# ls /logdir/ 查看指定的目录下是否有日志文件
+plj.000001  plj.index
+[root@client50 ~]# 
+
+++++++++++++++++++++++++++++++++++++
+验证binlog记录的信息？
+
+在数据库服务器执行sql命令，查看日志文件是否记录
+查询之外的sql命令
+mysql> select  * from db5.t1;
++------+
+| id   |
++------+
+|  101 |
+|  101 |
+|  101 |
++------+
+mysql> insert into db5.t1 values(777);
+mysql> insert into db5.t1 values(777);
+mysql> insert into db5.t1 values(777);
+mysql> update db5.t1 set id=888 where id=777;
+mysql> delete from db5.t1;
+mysql> select  * from  db5.t1;
+Empty set (0.00 sec)
+
+~]# mysqlbinlog  /logdir/plj.000001 | grep -i insert
+
+]# mysqlbinlog  /logdir/plj.000001  | grep -i update
+
+]# mysqlbinlog  /logdir/plj.000001  | grep -i delete
+
+]# mysqlbinlog  /logdir/plj.000001  | grep -i select
+]# mysqlbinlog  /logdir/plj.000001  | grep -i desc
+]# mysqlbinlog  /logdir/plj.000001  | grep -i show 
+
+
+使用binlog日志记录的sql命令 恢复数据
+命令格式：]#mysqlbinlog 选项  日志文件名 |  mysql -uroot -p密码
+
++++++++++使用时间选项恢复数据++++
+]#mysql  -uroot -p123456   db5  <  /datadir/db5_t1.sql
+
+
+]#  mysqlbinlog  --start-position=293  
+--stop-position=1552 /logdir/plj.000001 
+| mysql -uroot -p123456
+
+mysql> select  *  from  db5.t1;
+
+++++++++++++使用时间选项恢复数据++++++++++++++++++++++
+mysql> drop tables  db5.t1;
+
+]# mysql  -uroot -p123456   db5  <  /datadir/db5_t1.sql
+
+]# mysqlbinlog  --start-datetime="2018-10-20 11:55:40" 
+--stop-datetime="2018-10-20 11:56:03" /logdir/plj.000001 
+ |  mysql -uroot -p123456
+
+mysql> select  *  from  db5.t1;
+
+++++++++手动创建新的binlog日志文件+++++++++++++++++++++
+默认日志容量大于500M 自动创建新的日志文件
+
+mysql> show master status;
+
+mysql> flush logs;
+]# mysql -uroot -p123456 -e "flush logs"
+]# mysqldump -uroot -p123456 --flush-logs   db5 > /root/db5.sql
+]# systemctl  restart mysqld
+
+
++++++++++删除已有的binlog日志文件+++++++++++++++
+
+mysql> purge  master  logs  to  "plj.000005";
+mysql> reset master;
+
+++++++++++++++++++++++++++++++++++++++++++++++++++
+方法2 使用innobackupex命令实现数据的增量备份和恢复
+1 安装提供命令的软件包
+
+]# rpm -ivh libev-4.15-1.el6.rf.x86_64.rpm 
+]# yum -y install percona-xtrabackup-24-2.4.7-1.el7.x86_64.rpm
+]# rpm -ql percona-xtrabackup-24
+
+innobackupex命令格式  ]# innobackup  <选项>
+
+]# man innobackupex
+]# man xtrabackup
+
+innobackupex可以实现：
+
+
+注意：先把数据库的存储引擎修改为innodb
+mysql> create database db5;
+mysql> create table db5.a(id int);
+mysql> insert into db5.a values(110);
+mysql> insert into db5.a values(110);
+mysql> insert into db5.a values(110);
+
++++++++++++完全备份和恢复:+++++++++++++
+备份数据
+]# innobackupex --user root --password 123456  /allbak  
+--no-timestamp
+
+]# ls  /allbak  查看备份目录
+
+恢复数据: 1、准备恢复数据 --apply-log  2、拷贝数据  --copy-back 
+  218  systemctl  stop mysqld
+  219  rm -rf /var/lib/mysql
+  220  mkdir /var/lib/mysql
+  221  innobackupex --apply-log /allbak/
+  222  innobackupex --copy-back /allbak/
+  223  ls /var/lib/mysql
+  226  chown  -R mysql:mysql /var/lib/mysql
+  227  systemctl  start mysqld
+  228  mysql -uroot -p123456
+]# ls /var/lib/mysql/
+mysql> show  databases;
+mysql> select  * from  db5.a;
+
+
++++++++++++++增量备份和恢复+++++++++++++++++
+增量备份：备份上次备份后，所有新产生的数据
+--incremental  目录   指定增量备份文件存储目录
+--incremental-basedir=目录  指定上次备份文件存储目录
+
+第1次备份 是完全备份
+]#innobackupex --user root  --password 123456 \
+/fullabk  --no-timestamp
+
+完全备份后 继续向表里写入新数据
+mysql> insert into db5.a values(120),(120),(120),(120);
+
+增量备份
+]#innobackupex --user root  --password 123456  \
+--incremental  /new1dir  \
+--incremental-basedir=/fullabk --no-timestamp
+
+第1次增量备份完成后，继续向表里写入新数据
+mysql> insert into db5.a values(119),(119),(119),(119);
+
+再做增量备份
+]#innobackupex --user root  --password 123456  \
+--incremental  /new2dir  \
+--incremental-basedir=/new1dir  --no-timestamp
+
+
+查看备份信息
+]# ls  /fullabk
+]# ls  /new1dir
+]# ls  /new2dir
+

@@ -1,0 +1,307 @@
+配置Mongodb副本集
+
+
+1 修改副本集模式为replsets 
+
+在主机51、52、53 的配置问里添加如下配置后启动服务
+replSet=rs1
+
+]#/usr/local/mongodb/bin/mongo  --host 192.168.4.51 \
+--port 27051
+ 
+> config = {
+_id:"rs1",
+members:[
+{_id:0,host:"192.168.4.51:27051"},
+{_id:1,host:"192.168.4.52:27052"},
+{_id:2,host:"192.168.4.53:27053"}
+]
+}
+> rs.initiate(config)
+> rs.status()
+> rs.isMaster()
+
+测试集群：
+客户连接主库存取数据
+]#/usr/local/mongodb/bin/mongo \
+--host 192.168.4.51 --port 27051
+> use db5
+> db.t1.save({name:"bob",age:19})
+> db.t1.find()
+
+客户连接从库存取数据 
+]#/usr/local/mongodb/bin/mongo \
+--host 192.168.4.52 --port 27052
+>db.getMongo().setSlaveOk() 允许操作数据
+> use db5;
+> show tables
+> db.t1.find()
+
+测试集群高可以功能
+停止当前主库 51 ，在2个从库里选取新的主库。
+
+
+
+二、文档管理
+把/etc/passwd 文件内容存储到当前主库里，
+存放db5库下的user表里。
+
+插入文档 save() 和 insert() 或 insertMany()
+
+> db.ta.save({_id:7 , name:"bob"})
+> db.ta.find()
+
+> db.ta.save({_id:7 , name:"lucy"})
+> db.ta.find()
+
+> db.ta.insert({_id:7 , name:"bob"})
+
+> db.ta.insert({_id:9 , name:"bob"})
+> db.ta.find()
+
+> db.ta.insertMany([
+{name:"jerry",age:19},
+{name:"alice",email:"x@163.com"},
+{name:"bob",class:"nsd1807"}
+])
+
+> db.ta.find()  
+
+
+
+查询文档 
+find()   findOne() limit()  skip()  sort()  count()
+ 
+
+> db.user.find({},{_id:0})
+> db.user.find({},{_id:0,name:1})
+> db.user.find({},{name:1})
+> db.user.find({},{_id:0,name:1,uid:1})
+> db.user.find({shell:"/bin/bash"})
+> db.user.find({shell:"/bin/bash"},{_id:0})
+> db.user.findOne({},{_id:0,name:1})
+
+
+> db.user.find(
+{shell:"/sbin/nologin"},{_id:0,name:1,shell:1}
+)
+
++++++++++++++++++++++++++++++++++
+> db.user.find(
+{shell:"/sbin/nologin"},
+{_id:0,name:1,shell:1}
+).limit(1)
+
+> db.user.find(
+{shell:"/sbin/nologin"},
+{_id:0,name:1,shell:1}
+).limit(3)
+
+> db.user.find(
+{shell:"/sbin/nologin"},
+{_id:0,name:1,uid:1}
+).skip(1)
+
+> db.user.find(
+{shell:"/sbin/nologin"},
+{_id:0,name:1,uid:1}
+).skip(9)
+
+> db.user.find(
+{shell:"/sbin/nologin"},
+{_id:0,name:1,uid:1}
+).sort({uid:-1})
+
+> db.user.find(
+{shell:"/sbin/nologin"},
+{_id:0,name:1,uid:1}
+).sort({uid:1})
+
+> db.user.find( 
+{shell:"/sbin/nologin"}, 
+{_id:0,name:1,uid:1} 
+).sort({uid:1}).limit(10)
+
+> db.user.find( 
+{shell:"/sbin/nologin"}, 
+{_id:0,name:1,uid:1} 
+).skip(10).sort({uid:-1}).limit(1)
+
+> db.user.find({shell:"/sbin/nologin"}).count()
+
+> db.user.find().count()
+
+查询操作  更新操作  删除操作的匹配条件
+
+相等比较
+> db.user.find({shell:"/bin/bash"})
+> db.user.find({uid:10},{_id:0,name:1,uid:1})
+
+同时写多个条件是逻辑与比较
+> db.user.find({shell:"/bin/bash"},{_id:0})
+
+> db.user.find(
+{name:"root",uid:0,shell:"/bin/bash"},{_id:0} )
+
+在...里....
+> db.user.find({uid:{$in:[3,7,9,11]}},
+{_id:0,name:1,uid:1} )
+
+> db.user.find(
+{name:{$in:["mysql","apache","daemon","adm"]}},
+{_id:0,name:1,uid:1}
+)
+不在...里....
+> db.user.find(
+{shell:{$nin:["/bin/bash","/sbin/nologin"]}},
+{_id:0,name:1,shell:1}
+)
+$or 或比较
+> db.user.find(
+{$or:[ {uid:10},{name:"adm"},{shell:"/bin/bash"}]},
+{_id:0,name:1,shell:1,uid:1} )
+
+
+正则匹配
+rs1:PRIMARY> db.user.find(
+... {name:/^a/},
+... {_id:0,name:1}
+... )
+
+数值比较
+$lt  $lte  $gt  $gte  $ne
+> db.user.find(
+{uid: {$gte:1000,$lte:9999} },
+{_id:0,name:1,uid:1}
+)
+> db.user.find(
+{uid:{$lte:10} },
+{_id:0,name:1,uid:1}
+)
+
+空null
+> db.user.save({name:null,uid:1002})
+> db.user.save({name:"",uid:1002})
+> db.user.find( {name:null}, {_id:0,name:1,uid:1} )
+
+更新文档 update()
+
+> db.user.find({uid:{$lte:4}},{_id:0})
+
+> db.user.update({uid:{$lte:4}},{password:"A"})
+
+> db.user.find({uid:{$lte:4}},{_id:0})
+
+> db.user.find({password:"A"}}
+
++++++++++++++++++++++++++++++++++++++
+> db.user.find({uid:1,name:"bin"})
+
+> db.user.update(
+{uid:1,name:"bin"},
+{password:"F",shell:"aaaa"}
+)
+
+> db.user.find({uid:1,name:"bin"})
+> db.user.find({shell:"aaaa"})
+
+++++++++++++++++++++++++++++
+> db.user.find( {uid:{$gte:3,$lte:6}}, {_id:0} )
+
+> db.user.update(
+{uid:{$gte:3,$lte:6}},
+{$set:{password:"B",shell:"No"} },false,true
+)
+
+> db.user.find( {uid:{$gte:3,$lte:6}}, {_id:0} )
+
+++++++++++++++++++++++++++
+> db.user.update( 
+{uid:3}, 
+{$unset:{shell: "No",homedir : "/var/adm"}} 
+)
+
+> db.user.find({uid:3},{_id:0})
+++++++++++++++++++++++++
+> db.user.find({uid:{$lte:10}}, {_id:0,uid:1} )
+
+> db.user.update({uid:{$lte:10}}, 
+{$inc:{uid:-2}},false,true)
+
+> db.user.find({uid:{$lte:10}}, {_id:0,uid:1} )
+
+> db.user.update({uid:{$lte:10}}, 
+{$inc:{uid:3}},false,true)
+
++++++++++$push++++$addToSet++++++++++++++
+>db.user.save(
+{name:"alice",like:["a","b","c","d"]})
+
+>db.user.find({name:"alice"},{_id:0})
+
+> db.user.update({name:"alice"},{$push:{like:"e"}})
+> db.user.update({name:"alice"},{$push:{like:"e"}})
+
+>db.user.find({name:"alice"},{_id:0})
+
+> db.user.update({name:"alice"},
+{$addToSet:{like:"e"}})
+
+> db.user.update({name:"alice"},
+{$addToSet:{like:"G"}})
+
+>db.user.find({name:"alice"},{_id:0})
+
++++++++$pop+++ $pull+++++++++++++++++
+> db.user.find({name:"alice"},{_id:0})
+> db.user.update({name:"alice"},
+{$pop:{like:1}})
+> db.user.update({name:"alice"},
+{$pop:{like:-1}})
+> db.user.update({name:"alice"}, 
+{$pull:{like:"e"}})
+++++++++++++++++++++++++++++
+删除文档 remove()
+> db.ta.remove({})
+> db.user.remove({uid:{$lte:10}})
+> db.user.find({uid:{$lte:10}})
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+生产环境下把网站经常被访问的数据，一开始就存储在内存里
+。
+
+
+redis服务 提供内存 存储数据的功能
+clinet50 ---> web51
+  登录游戏账号（用户名 密码）验证--->内存（redis）
+
+                                      |
+  注册游戏账号（用户名 密码）----> 硬盘（mysql）
+
+       
+
+
++++++++++++++++++++++++++++++++++++++++++++++++++
+              client: http://192.168.4.250
+                 | 
+                 |
+                VIP:192.168.4.250
+
+             主    HA    备    
+          LVS/DR_1    LVS/DR_2
+
+                           
+      
+      web_1             web_2 /var/www/html/a.php
+         |               |
+         |------交换机------
+                   |
+                   |
+               maxscale(读写分离服务器)
+                  |
+     ----------------------          
+        |                |
+    master写           slave（读）
+    mysqld_1           mysqld_2
+       |                  |
+ /dev/sdb1(10G)      /dev/sdb1(10G)

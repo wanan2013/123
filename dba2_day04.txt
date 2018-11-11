@@ -1,0 +1,415 @@
+dba2_day04
+mysql> create database db9;
+mysql> create  table  table db9.user(
+    -> name char(20),
+    -> password  char(1),
+    -> uid int(2),
+    -> gid int(2),
+    -> comment char(150),
+    -> homedir char(150),
+    -> shell  char(30)
+    -> );
+mysql> system cp /etc/passwd  /var/lib/mysql-files/
+mysql> load data infile "/var/lib/mysql-files/passwd"
+    -> into table db9.user
+    -> fields terminated by ":"
+    -> lines  terminated by "\n";
+
+mysql> alter table  db9.user add
+    -> id int(2) primary key  auto_increment first;
+mysql>select * from db9.user;
+
+一、MySQL视图
+mysql> use db9;
+mysql> create view  v1 as  
+select name,uid from user;
+
+mysql> create view  v2(user,userid) 
+as  
+select name,uid from user;
+
+mysql> show tables;
+
+mysql> desc  v1;
+mysql> desc  v2;
+
+mysql> select  * from v1;
+mysql> select  * from v2;
+
+mysql> system ls /var/lib/mysql/db9/
+
+mysql> grant  select on db9.v1  
+to  u1@"%" identified by "123qqq...A";
+
+mysql> use db9;
+mysql> show  table  status\G;
+mysql> show  table  status  where  comment="view" \G;
+
+mysql> show create table v1;
+mysql> show create table v2;
+
+对视图表做update insert delete 操作时 
+基表也会跟着改变，反之亦然
+mysql> use db9;
+mysql> insert into v1 values("luc","3003");
+mysql> update  v1  set name="admin" where uid=0;
+mysql> delete from  db9.user where name="luc";
+
+
+mysql> drop view  v1;
+mysql> drop view  v2;
+mysql> system ls /var/lib/mysql/db9
+v1.frm v2.frm
+
+++++++++++++给视图表字段定义别名+++++++++++++++
+mysql> use db9;
+mysql> create table  t1  
+select name,uid,shell from user limit 3;
+
+mysql> create table  t2  
+select name,uid,homedir,gid from user limit 5;
+
+create view v3(a,b,c,d,e,f,g) 
+as 
+select * from  t1 left join t2 
+on  t1.name=t2.name and t1.uid = t2.uid;
+
+mysql> create view v4 
+
+as  
+
+select  a.name as aname , b.name as bname , 
+a.uid as auid , b.uid as  buid   
+from t1 a left join t2 b on a.uid=b.uid;
+
+
+mysql> create view v5 
+
+as  
+
+select  t1.name as aname , t2.name as bname , 
+t1.uid as auid , t2.uid as  buid   
+from t1  left join t2  on t1.uid=t2.uid;
+
+
+
++++++++++++++覆盖创建视图+++++++++
+mysql> create view  v3 as select  * from db9.user;
+ERROR 1050 (42S01): Table 'v3' already exists
+
+
+覆盖方式创建新视图
+mysql> create or replace view  v3 
+as select  * from db9.user;
+
+Query OK, 0 rows affected (0.04 sec)
+
+
+指定视图算法
+create ALGORITHM=TEMPTABLE view v6 
+as select  * from db9.user;
+
++++++with check option选项的使用
+
+with local check option  对视图里的数据访问时，
+只检查视图创建条件，不检查基表创建条件。
+
+
+with CASCADED check option  对视图里的数据访问时，
+既检查视图创建条件，又检查基表创建条件。
+mysql> create table user2  
+select name,uid,shell,homedir from user 
+where uid>=10 and uid<=50;
+
+mysql> select * from user2;
+mysql> create view v7 
+    -> as
+    -> select  * from  user2 where  uid>=25 
+    -> with local check option;
+mysql> select  * from  v7;
+mysql> update v7 set uid=7 where name="rpc";
+mysql> update v7 set uid=30 where name="rpc";
+
+mysql> create view v8 as  select name,uid,shell from user 
+where uid>=20 and uid <= 300 ;
+
+mysql> create view  v9 as select  * from v8  
+where uid>=40 with CASCADED check option;
+
+mysql> update v9 set uid=39 where name="gdm";不满足自己
+mysql> update v9 set uid=309 where name="gdm";不满足基表
+mysql> update v9 set uid=200 where name="gdm";两者都满足
+
+查看表记录
+select  * from v9 where name="gdm";
+select  * from v8 where name="gdm";
+select  * from user where name="gdm";
++++++++++++++++++++++++++++++++++++++++++++
+二、MySQL存储过程
+查看全局变量
+mysql> show global variables ;
+mysql> show global variables like "%timeout%";
+mysql> show global variables like "connect_timeout";
+
+查看会话变量
+mysql> show session variables ;
+mysql> show session variables like "%connections%";
+mysql> show session variables like "max_connections";
+
+自定义变量
+mysql> set @name="jim";
+Query OK, 0 rows affected (0.00 sec)
+
+mysql> select @name;  输出自定义变量值
++
+mysql> select @age;  没有定义过的变量
+
+mysql> set @x=0; 值是数字的
+mysql> select @x;
+
+把查询结果赋值给变量
+mysql> select count(name) into @x from db9.user where uid<=10;
+mysql> select  @x;
+
+declare 定义局部变量
+delimiter //
+create  procedure p2()
+begin
+    declare x int(2) default 9 ;
+    declare name char(5);
+    set name="jim";
+    select name;
+    select x;
+end
+//
+delimiter ;
+set @x = 77;
+call p2();
+select  @x;
++++++++++++++++++++++++
+
+++++++++++++++++++++++++++++++++++++++++++++++
+usd db9;
+delimiter //
+create  procedure p1()
+begin
+     select count(name) from db9.user where shell="/bin/bash";    
+end
+//
+delimiter ;
+
+call  p1();
+call  p1();
+
+mysql> select db,name,type,body 
+from 
+mysql.proc where name="p1"\G;
+
+drop   procedure p1;
+
+++++++++++++++++++++++++++++++++++
+delimiter //
+create  procedure p2()
+begin
+    declare x int(2) default 9 ;
+    declare name char(5);
+    set name="jim";
+    select name;
+    select x;
+end
+//
+delimiter ;
+call p2();
++++++++++++++++++++++++++++++++
+存储过程参数 类型：
+in  
+out
+inout
+
+use db9;
+delimiter //
+create  procedure p3(in username char(15))
+begin
+  select name from db9.user where name=username;
+end
+//
+delimiter ;
+
+call  p3(); 错误调用
+
+set @x="jim";
+call p3(@x)
+
+call  p3("bob")
+
++++++++++++++++++++++++++++++++++
+use db9;
+delimiter //
+create  procedure p4(in x int(2))
+begin
+    select x;
+    set x=9;
+    select x;
+    select count(name) into x from db9.user;
+    select x;
+end
+//
+delimiter ;
+
++++++++++++++++++++++++++++++++++
+delimiter //
+create  procedure p5( out x int(2) )
+begin
+    select x;
+    set x=9;
+    select x;
+    select count(name) into x from db9.user;
+    select x;
+end
+//
+delimiter ;
+
+call p5(); 错误
+call p5(1);错误
+set @z=100;
+call p5(@z);正确
+++++++++++++++++++++++++++++++++
+use db9;
+delimiter //
+create  procedure p6( inout username char(10))
+begin
+    select username;
+    set username="jerry";
+    select username;
+    select name from db9.user where name=username;
+    select name into username from db9.user where name="bin";
+    select username;
+end
+//
+delimiter ;
+
+call p6("bob");错误
+set @name="bob";
+call p6(@name);正确
+
++++++++++++++++++++++++++++++++
+mysql> set @z= 1  + 1;
+
+mysql> select @z;
+
+mysql> set @x=1,@y=2;
+
+mysql> set @z=@x + @y;
+
+mysql> select  @z;
+
++++++++++++++++++++++++++++++++++
+use db9;
+delimiter //
+create  procedure p7(in linenum int(2))
+begin
+    if linenum is not null then
+      select  * from db9.user where id=linenum;
+    end if;
+end
+//
+delimiter ;
+
++++++++++++++++++++++++++++++++++++++
+use db9;
+delimiter //
+create  procedure p8(in linenum int(2))
+begin
+    if linenum is not null then
+      select  * from db9.user where id=linenum;
+    else
+      select  * from db9.user where id=1;
+    end if;
+end
+//
+delimiter ;
+call p8(3);
+select @z;
+call p8(@z);
+
++++++++++++++++++++++++++++++++++++++
+delimiter //
+create  procedure p9()
+begin
+    declare x int(2);
+    set x = 10;
+    while x >= 10  do
+        select x;
+        set x = x + 1;  
+    end while;
+end
+//
+delimiter ;
+call  p9();
++++++++++++++++++++++++++++++++++++
+use db9;
+delimiter //
+create  procedure p10()
+begin
+   loop
+      select  name from db9.user where id=2;
+   end loop;
+end
+//
+delimiter ;
+
+call  p10();
+++++++++++++++++++++++++++++++
+delimiter //
+create  procedure p11()
+begin
+    declare x int(2);
+    set x = 1;
+  loop
+    select x;
+  end loop;
+end
+//
+delimiter ;
++++++++++++++++++++++++++++++++++++++
+delimiter //
+create  procedure p12()
+begin
+   declare i int(2);
+   set i = 10;
+   repeat
+     select i;
+     set i = i  - 1 ;
+     until i < 1
+   end repeat;
+end
+//
+delimiter ;
+
+call p12()
+++++++++++++++++++++++++++++++++++++++
+use db9;
+delimiter //
+create  procedure sumnum(in w int(2))
+begin
+   declare x int(2);
+   declare y int(2);
+   declare z int(2);
+   set z = 0;
+   set x = 1;
+   while  x <= w do
+        select uid into y from db9.user where id=x;
+        if y % 2 = 0 then
+           set z = z + 1;   
+           select name from db9.user where id=x;
+        end if;
+        set  x = x + 1;
+   end while;
+   select z;
+end
+//
+delimiter ;
+
+call sumnum(3);
+
+++++++++++++++++++++++++++++++++++++++
