@@ -276,10 +276,6 @@ select  * from t8;
 mysql> create  table   t30 (name char(2)) DEFAULT CHARSET=utf8;
 
 
-休息到10：10
-休息到11：15
-休息到15：15
-休息到16：10
 
 
 
